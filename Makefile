@@ -66,8 +66,8 @@ AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
-
-CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb
+#将 CFLAGS 中的 -O 选项修改为 -O0。 -O0 选项表示禁用所有优化，从而确保变量不会被编译器优化掉
+CFLAGS = -Wall -Werror -O0 -fno-omit-frame-pointer -ggdb 
 
 ifdef LAB
 LABUPPER = $(shell echo $(LAB) | tr a-z A-Z)
@@ -153,6 +153,7 @@ UPROGS=\
 	$U/_pingpong\
 	$U/_primes\
 	$U/_find\
+	$U/_xargs\
 	
 
 	

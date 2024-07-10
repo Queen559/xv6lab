@@ -8,11 +8,10 @@
 #include "elf.h"
 
 static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uint sz);
-
+//负责加载一个新程序并替换当前进程的地址空间,并设置进程的初始状态（如程序计数器和堆栈指针）
 int
 exec(char *path, char **argv)
-{
-  char *s, *last;
+{ char *s, *last;
   int i, off;
   uint64 argc, sz = 0, sp, ustack[MAXARG+1], stackbase;
   struct elfhdr elf;

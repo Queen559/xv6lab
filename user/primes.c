@@ -97,7 +97,7 @@ void backtrack(int *p){
         exit(0);
     }
     //打印上一个管道的第一个数
-    printf("primes %d\n", num);
+    printf("prime %d\n", num);
     //再需要创建一个管道
     int fp[2];
     pipe(fp);

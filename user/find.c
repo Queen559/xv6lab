@@ -87,7 +87,7 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 #include "kernel/fs.h"
-
+//提取文件名函数
 char* fmtname(char *path) //参考ls中的fmtname代码
 {
 	static char buf[DIRSIZ+1];
@@ -99,7 +99,7 @@ char* fmtname(char *path) //参考ls中的fmtname代码
   	// Return blank-padded name.
   	if(strlen(p) >= DIRSIZ)
     	return p;
-  	memmove(buf, p, strlen(p));
+  	memmove(buf, p, strlen(p));//从存储区p复制strlen(p)个字节到存储区buf
 	buf[strlen(p)] = 0;  //字符串结束符
   	return buf;
 }
@@ -125,7 +125,7 @@ find(char *path, char *name)
 	 switch(st.type){
 	 case T_FILE:  //如果是文件类型
 	 	if(strcmp(fmtname(path), name) == 0) 
-	     	printf("%s\n", path); //如果当前路径和文件名相同，则代表找到文件了
+	     	printf("%s\n", path); //如果当前路径和文件名相同，则代表找到文件了,打印的是路径不是文件名
 	  	break;
 	 case T_DIR:  //如果是目录类型
 	 	if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
@@ -133,22 +133,22 @@ find(char *path, char *name)
 	       	break;
 	   	}
 	   	strcpy(buf, path); //将输入的目录字符串复制到buf中
-	   	p = buf+strlen(buf);
+	   	p = buf+strlen(buf);//指针p指向了buf的末尾位置
 	   	*p++ = '/';  //将`/`拼接在后面
-	   	//读取 fd ，如果 read 返回字节数与 de 长度相等则循环
+	   	//逐个读取目录项，直到读取失败或读取到的目录项为空。
 	   	while(read(fd, &de, sizeof(de)) == sizeof(de)){
-	      	if(de.inum == 0)
+	      	if(de.inum == 0)//目录项为空则跳过
 	          	continue;
-	      	memmove(p, de.name, DIRSIZ);
-	       	p[DIRSIZ] = 0;
+	      	memmove(p, de.name, DIRSIZ);//将 de.name 的内容拷贝到 p 指向的位置开始的内存区域。
+	       	p[DIRSIZ] = 0;//设置文件名结束符
 	       //不去递归处理.和..
-	       if(!strcmp(de.name, ".") || !strcmp(de.name, ".."))
+	       if(!strcmp(de.name, ".") || !strcmp(de.name, ".."))//.代表当前目录,..代表父目录
 	           continue;
 	       find(buf, name); //继续进入下一层目录递归处理
 	   }
 	   break;
 	 }
-	 close(fd);
+	 close(fd);//将该文件描述符从进程的文件表中移除
 }
 
 int
@@ -156,8 +156,8 @@ main(int argc, char *argv[])
 {
   if(argc != 3){
     fprintf(2, "usage:find <path> <name>\n");
-    exit(1);
+    exit(1);//1表示出现了一些一般性的错误。
   }
     find(argv[1], argv[2]);
-    exit(0);
+    exit(0);//0表示程序正常退出。
 }
