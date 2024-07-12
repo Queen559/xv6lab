@@ -30,11 +30,12 @@ while(1)
         i++;
     }
     if(i==0) break;
+    //C是一个非常底层(接近机器语言)的编程语言，并没有一个方法来确定一个数组究竟有多长。所以为了告诉内核数组的结尾在哪，我们将0作为最后一个指针
     buf[i]=0;//终止字符串
     xargv[argc-1]=buf;//拼接
     xargv[argc] = 0;  // 确保参数数组以 NULL 结尾
     if(fork()==0){
-        exec(xargv[0],xargv);//xargv[0]类似于echo,cat这种
+        exec(xargv[0],xargv);//xargv[0]类似于echo,cat这种,操作系统从名为echo的文件中加载指令到当前的进程中，并替换了当前进程的内存，之后开始执行这些新加载的指令
         exit(0);
     }
     else{

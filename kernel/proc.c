@@ -194,7 +194,7 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
 }
-
+//这些数值实际上是机器代码指令，用于执行特定的操作
 // a user program that calls exec("/init")
 // od -t xC initcode
 uchar initcode[] = {
