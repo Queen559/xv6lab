@@ -351,24 +351,26 @@ uvmclear(pagetable_t pagetable, uint64 va)
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
+//dstva：目标虚拟地址（用户空间地址），复制的目的地
+//src：源地址（内核空间地址），复制的数据源。
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
 
   while(len > 0){
-    va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
+    va0 = PGROUNDDOWN(dstva);//当前页对齐的虚拟地址，当前目标虚拟地址所在页面的起始地址。
+    pa0 = walkaddr(pagetable, va0);//当前页对齐的物理地址。
     if(pa0 == 0)
       return -1;
-    n = PGSIZE - (dstva - va0);
+    n = PGSIZE - (dstva - va0);//dstva - va0 是 dstva 在当前页内的偏移量
     if(n > len)
-      n = len;
-    memmove((void *)(pa0 + (dstva - va0)), src, n);
+      n = len;//表示这次复制不跨页。
+    memmove((void *)(pa0 + (dstva - va0)), src, n);//pa0 + (dstva - va0) 是 dstva 对应的物理地址。
 
     len -= n;
     src += n;
-    dstva = va0 + PGSIZE;
+    dstva = va0 + PGSIZE;//更新目标虚拟地址到下一页的起始地址：
   }
   return 0;
 }

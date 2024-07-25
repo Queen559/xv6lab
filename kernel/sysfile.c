@@ -23,13 +23,16 @@ argfd(int n, int *pfd, struct file **pf)
 {
   int fd;
   struct file *f;
-
+//将p->trapframe->a0即系统调用的第一个参数赋值给fd, /从系统调用参数中提取文件描述符
   if(argint(n, &fd) < 0)
     return -1;
+ // 验证文件描述符的有效性
   if(fd < 0 || fd >= NOFILE || (f=myproc()->ofile[fd]) == 0)
     return -1;
+  // 将文件描述符存储到 pfd 中（如果 pfd 不为空）
   if(pfd)
     *pfd = fd;
+  // 将文件结构体指针存储到 pf 中（如果 pf 不为空）
   if(pf)
     *pf = f;
   return 0;
@@ -109,7 +112,8 @@ sys_fstat(void)
 {
   struct file *f;
   uint64 st; // user pointer to struct stat
-
+//argfd(0, 0, &f)：获取系统调用的第一个参数，即文件描述符，并将其转换为内核中的文件结构体指针 f
+//argaddr(1, &st),获取p->trapframe->a1即系统调用的第二个参数，赋值给st
   if(argfd(0, 0, &f) < 0 || argaddr(1, &st) < 0)
     return -1;
   return filestat(f, st);

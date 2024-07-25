@@ -26,22 +26,42 @@ void
 procinit(void)
 {
   struct proc *p;
-  
+  // 初始化进程 ID 锁，保护 PID 的分配
   initlock(&pid_lock, "nextpid");
+  //proc 是一个进程表的起始地址，NPROC 是进程表中的最大进程数。该循环初始化每个进程条目。
   for(p = proc; p < &proc[NPROC]; p++) {
+     // 初始化每个进程的锁
       initlock(&p->lock, "proc");
 
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
+      //kalloc() 分配一个物理页面，用于存储进程的内核栈。
       char *pa = kalloc();
       if(pa == 0)
         panic("kalloc");
+      //根据进程的索引计算内核栈的虚拟地址。
       uint64 va = KSTACK((int) (p - proc));
+      //将物理页面 pa 映射到计算出的虚拟地址 va，并设置页表项为读写权限 (PTE_R | PTE_W)。
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
   }
+  //初始化机器模式的虚拟内存:
   kvminithart();
+}
+
+//获取当前进程的数量
+uint64 nproc(void){
+  struct proc *p;
+  uint64 num=0;
+  for(p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    if(p->state!=UNUSED){
+      num+=1;
+    }
+    release(&p->lock);
+  }
+  return num;
 }
 
 // Must be called with interrupts disabled,
@@ -56,9 +76,12 @@ cpuid()
 
 // Return this CPU's cpu struct.
 // Interrupts must be disabled.
+//cpuid() 函数通常用于返回当前执行的CPU核的唯一标识符。在多核系统中，每个CPU核都有一个唯一的ID。
 struct cpu*
 mycpu(void) {
+  //cpuid() 函数获取当前CPU核的ID
   int id = cpuid();
+  //cpus 数组通常是一个包含所有CPU核结构体的数组。&cpus[id] 取出数组中第 id 个元素的地址，即当前CPU核的指针。
   struct cpu *c = &cpus[id];
   return c;
 }
@@ -66,8 +89,11 @@ mycpu(void) {
 // Return the current struct proc *, or zero if none.
 struct proc*
 myproc(void) {
+  //通常用于禁用中断或某种形式的锁定机制，以确保接下来的代码执行时不会被打断。
   push_off();
+  //mycpu() 函数通常用于获取当前正在运行的CPU核的信息。
   struct cpu *c = mycpu();
+  //从当前CPU指针 c 中获取当前正在运行的进程指针，并将其赋值给变量 p, c->proc 表示的是当前CPU核上正在运行的进程。
   struct proc *p = c->proc;
   pop_off();
   return p;
@@ -276,6 +302,7 @@ fork(void)
   np->sz = p->sz;
 
   np->parent = p;
+  np->mask=p->mask;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);

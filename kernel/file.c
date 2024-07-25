@@ -84,6 +84,7 @@ fileclose(struct file *f)
 
 // Get metadata about file f.
 // addr is a user virtual address, pointing to a struct stat.
+//用于从文件结构体 f 中获取文件的状态信息，并将其拷贝到用户空间
 int
 filestat(struct file *f, uint64 addr)
 {
@@ -91,9 +92,13 @@ filestat(struct file *f, uint64 addr)
   struct stat st;
   
   if(f->type == FD_INODE || f->type == FD_DEVICE){
+    //获取文件对应的 inode 的锁
     ilock(f->ip);
+    //调用 stati 函数获取 inode 的状态信息，并将其存储在 st 中。stati 函数会填充 struct stat 结构体中的信息
     stati(f->ip, &st);
+    //释放 inode 的锁。
     iunlock(f->ip);
+    //将 st 中的状态信息拷贝到用户空间地址 addr 指向的内存中，(char *)&st 表示将结构体指针转换为字符指针
     if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
       return -1;
     return 0;
