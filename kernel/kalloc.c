@@ -1,4 +1,4 @@
-// Physical memory allocator, for user processes,
+// PhyFical memory allocator, for user processes,
 // kernel stacks, page-table pages,
 // and pipe buffers. Allocates whole 4096-byte pages.
 //这段代码实现了一个简单的内核内存分配器，负责初始化、分配和释放内存页
