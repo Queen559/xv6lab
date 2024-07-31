@@ -15,6 +15,8 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+
+
 /*
  * create a direct-map page table for the kernel.
  */
@@ -439,4 +441,35 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+ 
+void vmp(pagetable_t pagetable,uint64 level){
+
+ for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    
+    // 检查该 PTE 是否有效（有效位 PTE_V 为 1）
+    if((pte & PTE_V))
+    {
+      for(int j=0;j<level;j++){
+      if(j==0) printf("..");
+      else printf(" ..");
+    }
+     printf("%d: pte %p pa %p\n",i,pte,PTE2PA(pte));
+      
+    uint64 child = PTE2PA(pte); 
+     // 检查该 PTE 是否没有设置读、写和执行权限（即该条目不是叶子节点，指向下级页表）。
+    if  ((pte & (PTE_R|PTE_W|PTE_X))== 0){
+      // this PTE points to a lower-level page table.
+   
+     vmp((pagetable_t)child,level+1);
+     
+    } } 
+}
+}
+
+
+void vmprint(pagetable_t pagetable) {
+    printf("page table %p\n", pagetable);
+    vmp(pagetable,1);
 }
