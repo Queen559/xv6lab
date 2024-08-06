@@ -21,6 +21,7 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+
 // initialize the proc table at boot time.
 void
 procinit(void)
@@ -34,12 +35,13 @@ procinit(void)
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      // char *pa = kalloc();
+      // if(pa == 0)
+      //   panic("kalloc");
+      // //#define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)
+      // uint64 va = KSTACK((int) (p - proc));
+      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      // p->kstack = va;
   }
   kvminithart();
 }
@@ -94,6 +96,7 @@ allocproc(void)
 {
   struct proc *p;
 
+  // 遍历进程表，查找 UNUSED 状态的进程
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == UNUSED) {
@@ -120,6 +123,24 @@ found:
     release(&p->lock);
     return 0;
   }
+  //vmprint(p->pagetable);
+  // 初始化用户进程内核页表
+  p->proc_kernel_pagetable = ukvminit();
+  if(p->proc_kernel_pagetable == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  //确保每个进程的内核页表都有该进程的内核栈的映射
+  char *pa = kalloc();
+      if(pa == 0)
+        panic("kalloc");
+      //#define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)
+      uint64 va = KSTACK((int) (p - proc));
+      ukvmmap(p->proc_kernel_pagetable,va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      p->kstack = va;
+  //vmprint(p->proc_kernel_pagetable);
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -136,12 +157,37 @@ found:
 static void
 freeproc(struct proc *p)
 {
-  if(p->trapframe)
+  pte_t *pte;
+
+  if (p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  if(p->pagetable)
+
+  // 释放用户页表
+  if (p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+
+
+  // 释放进程的内核栈物理内存
+  if (p->kstack) {
+    // 通过 kstack 虚拟地址找到最后一级的页表项
+    if ((pte = walk(p->proc_kernel_pagetable, p->kstack, 0)) == 0)
+      panic("freeproc: kstack");
+
+    // 删除页表项对应的物理地址
+    kfree((void*)PTE2PA(*pte));
+    //*pte = 0;  // 确保页表项被清除
+  }
+  p->kstack = 0;
+
+// 释放内核页表所占用的内存，但不释放叶子物理内存页面
+
+  if (p->proc_kernel_pagetable) {
+    proc_freekernelpagetable(p->proc_kernel_pagetable);
+  }
+  p->proc_kernel_pagetable = 0;  // 确保内核页表被置为0
+
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -151,6 +197,7 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
 }
+
 
 // Create a user page table for a given process,
 // with no user memory, but with trampoline pages.
@@ -185,6 +232,31 @@ proc_pagetable(struct proc *p)
   return pagetable;
 }
 
+void proc_freekernelpagetable(pagetable_t pagetable){
+  if (pagetable == 0) {
+  panic("proc_freekernelpagetable: pagetable is null");
+}
+   // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    //如果这两个条件都成立，说明当前 PTE 指向一个子级页表
+    if((pte & PTE_V)){
+      if (pagetable[i] == 0) {
+      panic("proc_freekernelpagetable: pagetable[i] is null");
+    }
+       pagetable[i] = 0;
+    
+    if((pte & (PTE_R|PTE_W|PTE_X))== 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      proc_freekernelpagetable((pagetable_t)child);
+    } 
+      }
+  }
+  kfree((void*)pagetable);
+  
+
+}
 // Free a process's page table, and free the
 // physical memory it refers to.
 void
@@ -473,13 +545,19 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        //进程的内核页表加载到内核的satp寄存器中
+        w_satp(MAKE_SATP(p->proc_kernel_pagetable));
+        sfence_vma();
         swtch(&c->context, &p->context);
-
+        
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
-
+        //scheduler()应该在没有进程运行时使用kernel_pagetable。
+        kvminithart();
         found = 1;
+       
+        
       }
       release(&p->lock);
     }
