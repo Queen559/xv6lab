@@ -184,6 +184,10 @@ int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t);
 void            vmp(pagetable_t,uint64);
+int             copyin_new(pagetable_t, char *, uint64, uint64);
+int             copyinstr_new(pagetable_t, char *, uint64, uint64);
+int             uvmcopyuser_to_kernel(pagetable_t, pagetable_t, uint64 , uint64);
+
 
 // plic.c
 void            plicinit(void);

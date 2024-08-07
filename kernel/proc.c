@@ -116,7 +116,7 @@ found:
     return 0;
   }
 
-  // An empty user page table.
+  // An empty user page table.这里只是一个空的用户页表，而没有对p->sz做映射
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
     freeproc(p);
@@ -292,6 +292,8 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
+  //添加内容
+  uvmcopyuser_to_kernel(p->pagetable, p->proc_kernel_pagetable, 0, p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -314,14 +316,20 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
+  //增长n字节
   if(n > 0){
+    //越界检查
+    if(PGROUNDDOWN(sz + n) >= PLIC)
+      return -1;
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    uvmcopyuser_to_kernel(p->pagetable,p->proc_kernel_pagetable,sz-n,sz);
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
+
   return 0;
 }
 
@@ -345,6 +353,15 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+
+  //Copy user memory from userpagetable to kernelpagetable
+  if(uvmcopyuser_to_kernel(np->pagetable, np->proc_kernel_pagetable, 0,p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+
+
   np->sz = p->sz;
 
   np->parent = p;
