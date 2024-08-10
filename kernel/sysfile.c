@@ -484,3 +484,28 @@ sys_pipe(void)
   }
   return 0;
 }
+
+//sys_sigreturn应该只返回0
+uint64 sys_sigreturn(void){
+  struct proc* p = myproc();
+    // trapframecopy must have the copy of trapframe
+    if(p->trapframecopy != p->trapframe + 512) {
+        return -1;
+    }
+    memmove(p->trapframe, p->trapframecopy, sizeof(struct trapframe));   // restore the trapframe
+    p->alarm_tick = 0;     // prevent re-entrant
+  return 0;
+}
+
+//
+uint64 sys_sigalarm(void){
+  int interval;//读取第一个参数
+  uint64 handler;//读取第二个参数
+  struct proc *p = myproc();
+  if(argint(0,&interval)< 0 || argaddr(1, &handler) < 0){
+     return -1;
+  }
+  p->alarm_interval=interval;
+  p->alarm_handler=(void(*)())handler;
+  return 0; 
+}

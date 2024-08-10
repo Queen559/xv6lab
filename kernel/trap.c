@@ -77,8 +77,23 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
+    //如果应用程序调用sigalarm(0, 0)，内核应停止生成定期警报调用
+    p->alarm_tick++;
+    if(p->alarm_interval){
+      //仅当进程有未完成的计时器时才调用警报函数。
+      if(p->alarm_tick==p->alarm_interval){
+        p->trapframecopy = p->trapframe + 512;  
+        memmove(p->trapframecopy,p->trapframe,sizeof(struct trapframe));    // 复制trapframe
+        //p->alarm_tick=0;//计时器清零
+        p->trapframe->epc=(uint64)p->alarm_handler;//转到警报处理函数
+      }
+      
+    }
+
     yield();
+  }
+    
 
   usertrapret();
 }
