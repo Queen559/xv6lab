@@ -65,7 +65,36 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  }
+  else if(r_scause() == 13 ||r_scause() == 15){
+    //存储导致page fault的虚拟地址
+    uint64 va=r_stval();
+    if(va>p->sz||va<PGROUNDDOWN(p->trapframe->sp)){
+    p->killed=1;
+    //printf("va is too big\n");
+    }
+    else{
+    //向下舍入到页面边界
+    va=PGROUNDDOWN(va);
+    //为va分配一页物理内存
+    char *mem=kalloc();
+    //将物理内存映射到用户页表中
+    if(mem==0){
+      p->killed=1;//如果分配内存失败，则杀死进程
+      //printf("usertrap(): kalloc() failed\n");//打印错误信息
+      exit(-1);  // Immediate exit on memory allocation failure
+    }
+    else{
+      memset(mem, 0, PGSIZE);
+      if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+      kfree(mem);
+      printf("usertrap(): mappages() failed\n");
+      p->killed=1;
+      exit(-1);  // Immediate exit on mapping failure
+    }
+    }
+  }}
+  else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
