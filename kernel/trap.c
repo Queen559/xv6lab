@@ -15,6 +15,8 @@ extern char trampoline[], uservec[], userret[];
 void kernelvec();
 
 extern int devintr();
+pte_t* walk(pagetable_t pagetable, uint64 va, int create);
+
 
 void
 trapinit(void)
@@ -65,7 +67,44 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  }else if(r_scause() == 15){
+    uint64 va=r_stval();//获取虚拟地址
+    pte_t *pte;
+    uint64 pa;
+    //注，这里va不能向下舍入页边界
+    if((pte=walk(p->pagetable,va,0))==0){
+      panic("pte should exist");
+    }
+    //确认页面是COW页面
+    if(!(PTE_FLAGS(*pte)&PTE_RSW)){
+     p->killed=1;
+    }else{
+     //向下舍入到页面边界
+    va=PGROUNDDOWN(va);
+    //为va分配一页物理内存
+    char *mem=kalloc();
+    //将物理内存映射到用户页表中
+    if(mem==0){
+      p->killed=1;//如果分配内存失败，则杀死进程
+      //printf("usertrap(): kalloc() failed\n");//打印错误信息
+    }
+     else{
+    //获取旧页面的物理地址
+     pa = PTE2PA(*pte);
+     //将旧页面的内容复制给新页面
+     memmove(mem, (char*)pa, PGSIZE);
+     //将新页面的标志位设置成可读写
+     uint64 flags=(PTE_FLAGS(*pte)|PTE_W)&(~PTE_RSW);
+    //解除旧页面的映射
+     uvmunmap(p->pagetable,va,1,1);
+     //将新页面映射到进程的页表中
+     if(mappages(p->pagetable,va,PGSIZE,(uint64)mem,flags)){
+      p->killed=1;
+     }
+    }
+    }
+  }
+   else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

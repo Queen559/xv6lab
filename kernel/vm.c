@@ -311,7 +311,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  //char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -320,13 +320,20 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    if(flags&PTE_W){
+      flags=(flags|PTE_RSW)&(~PTE_W);
+    }
+    *pte=PA2PTE(pa)|flags;
+
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      //kfree(mem);
       goto err;
     }
+    //虽然没有重新分配物理页面，但是映射了，引用计数要加1
+    incref((void *)pa);
   }
   return 0;
 
@@ -355,9 +362,39 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
-
+  if(dstva > MAXVA - len) return -1; //添加
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    //一定要写在pa0前面，否则pa0得到的还是虚拟地址映射到旧页面的物理地址
+    //获取虚拟地址对应的旧页面的物理地址
+    pte_t *pte=walk(pagetable,va0,0);
+    if(pte == 0) return -1;
+    //获取页表项，判断是否是不可写COW页面
+   if(!(PTE_FLAGS(*pte)&PTE_W)) {
+      if(!(PTE_FLAGS(*pte)&PTE_RSW)) {
+        return -1;
+      } 
+       //为va分配一页物理内存
+    char *mem=kalloc();
+    if(mem==0){
+      return -1;//如果分配内存失败，则杀死进程
+    }
+     else{
+    //获取旧页面的物理地址
+     uint64 pa = PTE2PA(*pte);
+     //将旧页面的内容复制给新页面,还是要复制，不能省
+     memmove(mem, (char*)pa, PGSIZE);
+     //将新页面的标志位设置成可读写
+     uint64 flags=(PTE_FLAGS(*pte)|PTE_W)&(~PTE_RSW);
+    //解除旧页面的映射
+     uvmunmap(pagetable,va0,1,1);
+     //将新页面映射到进程的页表中
+     if(mappages(pagetable,va0,PGSIZE,(uint64)mem,flags)){
+      return -1;
+     }
+    }
+    }
+    //至此下面的pa0是虚拟地址va0对应的新的物理页面的地址
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
