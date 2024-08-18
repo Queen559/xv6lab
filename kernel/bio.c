@@ -131,8 +131,8 @@ bget(uint dev, uint blockno) {
   struct buf* tmp;
 
   // Recycle the least recently used (LRU) unused buffer.
-  // 从当前散列桶开始查找
-  for(int i = 0, cycle = 0; cycle != NBUCKET; i = (i + 1) % NBUCKET) {
+  // 从当前散列桶开始查找最近最近未使用的
+  for(int i = bid, cycle = 0; cycle != NBUCKET; i = (i + 1) % NBUCKET) {
     ++cycle;
     // 如果遍历到当前散列桶，则不重新获取锁
     if(i != bid) {
