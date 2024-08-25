@@ -238,6 +238,7 @@ bad:
   return -1;
 }
 
+
 static struct inode*
 create(char *path, short type, short major, short minor)
 {
@@ -320,6 +321,36 @@ sys_open(void)
     iunlockput(ip);
     end_op();
     return -1;
+  }
+
+  //处理符号链接
+  if(ip->type==T_SYMLINK&&!(omode & O_NOFOLLOW)){
+    // 若符号链接指向的仍然是符号链接，则递归地跟随它，直到找到真正指向的文件
+    // 但深度不能超过 MAX_SYMLINK_DEPTH
+    for(int i = 0; i < 10; ++i) {
+      // 读出符号链接指向的路径
+      if(readi(ip, 0, (uint64)path, 0, MAXPATH) != MAXPATH) {
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      iunlockput(ip);
+      ip = namei(path);
+      if(ip == 0) {
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+      if(ip->type != T_SYMLINK)
+        break;
+    }
+    // 超过最大允许深度后仍然为符号链接，则返回错误
+    if(ip->type == T_SYMLINK) {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
@@ -482,5 +513,33 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_symlink(void)
+{
+  char target[MAXPATH],path[MAXPATH];
+  struct inode* ip;
+  // 从用户态获取参数 target 和 path，分别表示软链接的目标路径和软链接的路径
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0) {
+    return -1;
+  }
+
+  //开始文件系统操作事务
+  begin_op();
+  if ((ip = namei(path)) == 0) {
+    // the path inode does not exist
+    ip = create(path, T_SYMLINK, 0, 0);
+    iunlock(ip);
+  } 
+  ilock(ip);
+  //将target写入path的inode中
+  // write the target path name into the end of inode
+  if (writei(ip, 0, (uint64)target, ip->size, MAXPATH) != MAXPATH) {
+    panic("symlink");
+  }
+  iunlockput(ip);
+  end_op();
   return 0;
 }
